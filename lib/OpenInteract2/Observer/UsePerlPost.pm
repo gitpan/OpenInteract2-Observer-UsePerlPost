@@ -1,6 +1,6 @@
 package OpenInteract2::Observer::UsePerlPost;
 
-# $Id: UsePerlPost.pm,v 1.2 2004/12/06 05:54:00 cwinters Exp $
+# $Id: UsePerlPost.pm,v 1.7 2004/12/16 18:35:06 cwinters Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,7 @@ use Net::Blogger;
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 
-$OpenInteract2::Observer::UsePerlPost::VERSION  = '0.02';
+$OpenInteract2::Observer::UsePerlPost::VERSION  = '0.03';
 
 my $DEFAULT_PROXY = 'http://use.perl.org/journal.pl';
 my $DEFAULT_URI   = 'http://use.perl.org/Slash/Journal/SOAP';
@@ -25,8 +25,13 @@ sub update {
     return unless ( $type eq 'post add' );
 
     my $request = CTX->request;
-    my $do_skip = $action->param( 'use_perl_skip' )
-                  || $request->param( 'use_perl_skip' );
+
+    my $do_skip = $action->param( 'use_perl_skip' );
+    unless ( $do_skip ) {
+        if ( $request ) {
+            $do_skip = $request->param( 'use_perl_skip' );
+        }
+    }
     return if ( $do_skip eq 'yes' );
 
     $log ||= get_logger( LOG_APP );
@@ -114,10 +119,20 @@ sub _generate_footer {
         };
 
         if ( $object_url ) {
-            my $host = CTX->request->server_name;
-            my $deploy_under = CTX->deploy_url;
-            my $server_url = "http://$host$deploy_under";
-            $footer =~ s/\$LINK/$server_url$object_url/g;
+            my $request = CTX->request;
+            my $host    = ( $request )
+                            ? $request->server_name
+                            : CTX->server_config->{server_host};
+            if ( $host ) {
+                my $server_url = "http://$host" . DEPLOY_URL;
+                $footer =~ s/\$LINK/$server_url$object_url/g;
+            }
+            else {
+                $log->warn( "Cannot generate footer: no server host found. ",
+                            "Please define server configuration key ",
+                            "'Global.server_host' so I know what hostname to use." );
+                return '';
+            }
         }
         if ( $object_id ) {
             $footer =~ s/\$ID/$object_id/g;
