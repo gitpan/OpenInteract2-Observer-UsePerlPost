@@ -1,6 +1,6 @@
 package OpenInteract2::Observer::UsePerlPost;
 
-# $Id: UsePerlPost.pm,v 1.7 2004/12/16 18:35:06 cwinters Exp $
+# $Id: UsePerlPost.pm,v 1.8 2004/12/16 19:30:01 cwinters Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,7 @@ use Net::Blogger;
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 
-$OpenInteract2::Observer::UsePerlPost::VERSION  = '0.03';
+$OpenInteract2::Observer::UsePerlPost::VERSION  = '0.04';
 
 my $DEFAULT_PROXY = 'http://use.perl.org/journal.pl';
 my $DEFAULT_URI   = 'http://use.perl.org/Slash/Journal/SOAP';
@@ -76,6 +76,12 @@ sub update {
                          || $DEFAULT_PROXY;
     my $use_perl_uri   = $action->param( 'use_perl_uri' )
                          || $DEFAULT_URI;
+
+    # Before we send the content we want to get rid of any HTML that
+    # use.perl might not like. (This could be better done...)
+
+    $content =~ s|<pre[^>]+>|<ecode>|g;
+    $content =~ s|</pre>|</ecode>|g;
 
     my $debug_only = $action->param( 'use_perl_debug' );
     if ( $debug_only =~ /^(yes|true)/i ) {

@@ -1,5 +1,10 @@
 Revision history for Perl extension OpenInteract2::Observer::UsePerlPost.
 
+0.04  Sat Dec 18 21:11:20 EST 2004
+
+  - Replace all <pre></pre> instances with <ecode></ecode>
+
+
 0.03  Thu Dec 16 13:11:15 EST 2004
 
   - Fix bug in creating URL for deployment -- you couldn't run this
