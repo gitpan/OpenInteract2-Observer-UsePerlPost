@@ -1,5 +1,13 @@
 Revision history for Perl extension OpenInteract2::Observer::UsePerlPost.
 
+0.05  Sun Jan 16 17:19:12 EST 2005
+
+  - At the request of some use.perl users (and for the clarity of what
+  you're writing), replace all <img ...> tags with links to the actual
+  image and text from the 'alt' attribute describing what it is. (You
+  are using alt attributes, right?)
+
+
 0.04  Sat Dec 18 21:11:20 EST 2004
 
   - Replace all <pre></pre> instances with <ecode></ecode>

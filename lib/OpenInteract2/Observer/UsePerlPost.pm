@@ -1,6 +1,6 @@
 package OpenInteract2::Observer::UsePerlPost;
 
-# $Id: UsePerlPost.pm,v 1.8 2004/12/16 19:30:01 cwinters Exp $
+# $Id: UsePerlPost.pm,v 1.9 2005/01/17 00:06:59 cwinters Exp $
 
 use strict;
 use Log::Log4perl            qw( get_logger );
@@ -8,7 +8,7 @@ use Net::Blogger;
 use OpenInteract2::Constants qw( :log );
 use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 
-$OpenInteract2::Observer::UsePerlPost::VERSION  = '0.04';
+$OpenInteract2::Observer::UsePerlPost::VERSION  = '0.05';
 
 my $DEFAULT_PROXY = 'http://use.perl.org/journal.pl';
 my $DEFAULT_URI   = 'http://use.perl.org/Slash/Journal/SOAP';
@@ -80,8 +80,30 @@ sub update {
     # Before we send the content we want to get rid of any HTML that
     # use.perl might not like. (This could be better done...)
 
+    # First create 'ecode' sections...
+
     $content =~ s|<pre[^>]+>|<ecode>|g;
     $content =~ s|</pre>|</ecode>|g;
+
+    # ...then remove all img tags and replace them with links to the
+    # image and a note about what you're seeing
+
+    my @image_tags = $content =~ /(<img[^>]+>)/gsm;
+    foreach my $img_tag ( @image_tags ) {
+        my ( $src ) = $img_tag =~ /src="([^"]+)"/sm;
+        my ( $alt ) = $img_tag =~ /alt="([^"]+)"/sm;
+        unless ( $alt ) {
+            my $base_src = '';
+            if ( $alt =~ m|/| ) {
+                ( $base_src ) = $src =~ m|.*/(.*)$|;
+            }
+            else {
+                $base_src = $src;
+            }
+            $alt = $base_src;
+        }
+        $content =~ s|$img_tag|(view image: <a href="$src">$alt</a>)|sm;
+    }
 
     my $debug_only = $action->param( 'use_perl_debug' );
     if ( $debug_only =~ /^(yes|true)/i ) {
@@ -251,6 +273,25 @@ If you need to change either 'use_perl_proxy' or 'use_perl_uri' please
 contact the author since it probably means the API has changed and the
 default behavior of this module should be updated.
 
+=head2 Modifying your content
+
+We modify the content extracted from your object in the following
+ways:
+
+=over 4
+
+=item *
+
+All '<pre>' tags are replaced with '<ecode>' tags.
+
+=item *
+
+All '<img>' tags are removed and replaced with a link to the image and
+text from that image's 'alt' attribute. If you don't specify an 'alt'
+attribute we generate some lame text for you.
+
+=back
+
 =head1 SEE ALSO
 
 L<Net::Blogger>
@@ -263,7 +304,7 @@ L<Class::Observable>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2004 Chris Winters. All rights reserved.
+Copyright (c) 2004-5 Chris Winters. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
