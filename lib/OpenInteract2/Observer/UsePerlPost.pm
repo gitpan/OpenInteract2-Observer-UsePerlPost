@@ -6,21 +6,30 @@ use strict;
 use Log::Log4perl            qw( get_logger );
 use Net::Blogger;
 use OpenInteract2::Constants qw( :log );
+use OpenInteract2::Context   qw( CTX DEPLOY_URL );
 
-$OpenInteract2::Observer::UsePerlPost::VERSION  = '0.01';
+$OpenInteract2::Observer::UsePerlPost::VERSION  = '0.02';
 
 my $DEFAULT_PROXY = 'http://use.perl.org/journal.pl';
 my $DEFAULT_URI   = 'http://use.perl.org/Slash/Journal/SOAP';
 
-my @FIELDS = qw(
-    use_perl_subject use_perl_content use_perl_user_id use_perl_password
+my @REQUIRED_FIELDS = qw(
+    use_perl_subject use_perl_content
+    use_perl_user_id use_perl_password
 );
+
+my ( $log );
 
 sub update {
     my ( $class, $action, $type, $object ) = @_;
     return unless ( $type eq 'post add' );
 
-    my $log ||= get_logger( LOG_APP );
+    my $request = CTX->request;
+    my $do_skip = $action->param( 'use_perl_skip' )
+                  || $request->param( 'use_perl_skip' );
+    return if ( $do_skip eq 'yes' );
+
+    $log ||= get_logger( LOG_APP );
 
     my $subject_field = $action->param( 'use_perl_subject' );
     my $content_field = $action->param( 'use_perl_content' );
@@ -32,8 +41,8 @@ sub update {
     unless ( $subject_field and $content_field and $user_id and $password ) {
         $log->error(
             "$error_preamble You must define the following parameters in ",
-            "your action: ", join( ', ', @FIELDS ), ". You can do so in ",
-            "the configuration file or in the action code itself."
+            "your action: ", join( ', ', @REQUIRED_FIELDS ), ". You can ",
+            "do so in the configuration file or in the action code itself."
         );
         return;
     }
@@ -43,34 +52,14 @@ sub update {
     unless ( $subject and $content ) {
         $log->error(
             "$error_preamble No subject found from method '$subject_field' ",
-            "or no content found from method '$content_field'"
+            "or no content found from method '$content_field'; not creating ",
+            "journal entry."
         );
+        return;
     }
 
     if ( my $footer = $action->param( 'use_perl_footer' ) ) {
-        my ( $object_info, $object_url, $object_id );
-        if ( $footer =~ /\$LINK/ || $footer =~ /\$ID/ ) {
-            eval {
-                $object_info = $object->object_description;
-                $object_url  = $object_info->{url};
-                $object_id   = $object_info->{object_id};
-            };
-
-            # last-ditch to define the ID
-            eval {
-                $object_id ||= $object->id
-            };
-
-            if ( $object_url ) {
-                $footer =~ s/\$LINK/$object_url/g;
-            }
-            if ( $object_id ) {
-                $footer =~ s/\$ID/$object_id/g;
-            }
-        }
-
-        $log->is_info && $log->info( "Adding footer: $footer" );
-        $content .= "\n$footer";
+        $content .= "\n\n" . $class->_generate_footer( $object, $footer );
     }
 
     my $blogger = Net::Blogger->new(
@@ -107,6 +96,35 @@ sub update {
         $log->is_info &&
             $log->info( "Result from adding entry '$subject': $post_id" );
     }
+}
+
+sub _generate_footer {
+    my ( $class, $object, $footer ) = @_;
+    if ( $footer =~ /\$LINK/ || $footer =~ /\$ID/ ) {
+        my ( $object_info, $object_url, $object_id );
+        eval {
+            $object_info = $object->object_description;
+            $object_url  = $object_info->{url};
+            $object_id   = $object_info->{object_id};
+        };
+
+        # last-ditch to define the ID
+        eval {
+            $object_id ||= $object->id
+        };
+
+        if ( $object_url ) {
+            my $host = CTX->request->server_name;
+            my $deploy_under = CTX->deploy_url;
+            my $server_url = "http://$host$deploy_under";
+            $footer =~ s/\$LINK/$server_url$object_url/g;
+        }
+        if ( $object_id ) {
+            $footer =~ s/\$ID/$object_id/g;
+        }
+    }
+    $log->is_info && $log->info( "Adding footer: $footer" );
+    return $footer;
 }
 
 1;
@@ -164,6 +182,14 @@ What is an observer? See L<Class::Observer> for general information
 and L<OpenInteract2::Observer> for specifics related to OpenInteract.
 
 =head2 Configuration
+
+B<use_perl_skip> (optional)
+
+If this parameter set in the action or in the
+L<OpenInteract2::Request> to 'yes' or 'true', this observer won't kick
+off the journal addition. This allows you to stick a checkbox on the
+form that adds your object to skip the use.perl part if you want. (For
+instance, folks there might not dig your weekly cat photo post...)
 
 B<use_perl_subject> (required)
 
